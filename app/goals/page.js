@@ -134,6 +134,12 @@ export default function GoalsPage() {
         </div>
 
         {/* Goals List */}
+        {goals.length === 0 && (
+          <div className="bg-white rounded-2xl p-12 shadow-sm flex flex-col items-center justify-center text-center">
+            <p className="text-gray-400 text-sm">No goals set yet.</p>
+            <p className="text-gray-300 text-xs mt-1">Click "New Goal" to add one.</p>
+          </div>
+        )}
         <div className="space-y-3">
           {goals.map(g => (
             <div key={g.id} className="bg-white rounded-2xl p-5 shadow-sm">
