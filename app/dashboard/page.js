@@ -32,11 +32,6 @@ function buildBarData(observations, reviews) {
   }))
 }
 
-const pieData = [
-  { name: 'Completed', value: 84 },
-  { name: 'Pending', value: 16 },
-]
-
 export default function Dashboard() {
   const [counts, setCounts] = useState({ staff: 0, observations: 0, reviews: 0, goals: 0 })
   const [loading, setLoading] = useState(true)
@@ -44,6 +39,7 @@ export default function Dashboard() {
   const [allReviews, setAllReviews] = useState([])
   const [allGoals, setAllGoals] = useState([])
   const [barData, setBarData] = useState(MONTHS.map(month => ({ month, observations: 0, reviews: 0 })))
+  const [pieStats, setPieStats] = useState({ staffPct: 0, goalsPct: 0 })
   const [insights, setInsights] = useState([])
   const [insightsLoading, setInsightsLoading] = useState(false)
 
@@ -69,6 +65,15 @@ export default function Dashboard() {
       setAllGoals(safeGoals)
       setLoading(false)
       setBarData(buildBarData(safeObs, safeReviews))
+
+      // Pie chart: real percentages
+      const staffCount = Array.isArray(staff) ? staff.length : 0
+      const reviewedStaff = new Set(safeReviews.filter(r => r.status === 'Completed').map(r => r.teacher)).size
+      const staffPct = staffCount > 0 ? Math.round((reviewedStaff / staffCount) * 100) : 0
+      const goalsPct = safeGoals.length > 0
+        ? Math.round((safeGoals.filter(g => g.status === 'On Track' || g.status === 'Completed').length / safeGoals.length) * 100)
+        : 0
+      setPieStats({ staffPct, goalsPct })
     })
   }, [])
 
@@ -170,19 +175,24 @@ export default function Dashboard() {
           <div className="bg-white rounded-2xl p-6 shadow-sm flex flex-col items-center justify-center">
             <h2 className="font-semibold text-gray-800 mb-4 self-start">Review Completion</h2>
             <PieChart width={160} height={160}>
-              <Pie data={pieData} cx={75} cy={75} innerRadius={50} outerRadius={75} dataKey="value" startAngle={90} endAngle={-270}>
-                {pieData.map((entry, index) => (
-                  <Cell key={index} fill={COLORS[index]} />
-                ))}
+              {/* Outer ring — Staff reviewed */}
+              <Pie data={[{ value: pieStats.staffPct }, { value: 100 - pieStats.staffPct }]} cx={75} cy={75} innerRadius={58} outerRadius={75} dataKey="value" startAngle={90} endAngle={-270} strokeWidth={0}>
+                <Cell fill="#1e293b" />
+                <Cell fill="#e2e8f0" />
+              </Pie>
+              {/* Inner ring — Goals on track */}
+              <Pie data={[{ value: pieStats.goalsPct }, { value: 100 - pieStats.goalsPct }]} cx={75} cy={75} innerRadius={38} outerRadius={55} dataKey="value" startAngle={90} endAngle={-270} strokeWidth={0}>
+                <Cell fill="#f59e0b" />
+                <Cell fill="#e2e8f0" />
               </Pie>
             </PieChart>
             <div className="flex gap-6 mt-4 text-sm">
               <div className="text-center">
-                <p className="font-bold text-gray-800">84%</p>
+                <p className="font-bold text-gray-800">{pieStats.staffPct}%</p>
                 <p className="text-gray-500 text-xs">Staff</p>
               </div>
               <div className="text-center">
-                <p className="font-bold text-yellow-500">91%</p>
+                <p className="font-bold text-yellow-500">{pieStats.goalsPct}%</p>
                 <p className="text-gray-500 text-xs">Goals</p>
               </div>
             </div>
