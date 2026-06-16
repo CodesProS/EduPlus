@@ -39,6 +39,7 @@ const pieData = [
 
 export default function Dashboard() {
   const [counts, setCounts] = useState({ staff: 0, observations: 0, reviews: 0, goals: 0 })
+  const [loading, setLoading] = useState(true)
   const [recentReviews, setRecentReviews] = useState([])
   const [allReviews, setAllReviews] = useState([])
   const [allGoals, setAllGoals] = useState([])
@@ -66,6 +67,7 @@ export default function Dashboard() {
       setRecentReviews(safeReviews.slice(0, 5))
       setAllReviews(safeReviews)
       setAllGoals(safeGoals)
+      setLoading(false)
       setBarData(buildBarData(safeObs, safeReviews))
     })
   }, [])
@@ -123,7 +125,10 @@ export default function Dashboard() {
               </div>
               <div>
                 <p className="text-sm text-gray-500">{label}</p>
-                <p className="text-2xl font-bold text-gray-800">{value}</p>
+                {loading
+                  ? <div className="h-8 w-16 bg-gray-200 rounded animate-pulse mt-1" />
+                  : <p className="text-2xl font-bold text-gray-800">{value}</p>
+                }
               </div>
             </div>
           ))}
