@@ -167,6 +167,12 @@ export default function ObservationsPage() {
 
         {/* Observations List */}
         {loading && <p className="text-gray-400 text-sm">Loading...</p>}
+        {!loading && observations.length === 0 && (
+          <div className="bg-white rounded-2xl p-12 shadow-sm flex flex-col items-center justify-center text-center">
+            <p className="text-gray-400 text-sm">No observations logged yet.</p>
+            <p className="text-gray-300 text-xs mt-1">Click "New Observation" to get started.</p>
+          </div>
+        )}
         <div className="space-y-3">
           {observations.map(obs => (
             <div key={obs.id} className="bg-white rounded-2xl p-5 shadow-sm">
