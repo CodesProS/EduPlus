@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Eye, ClipboardList,
-  StickyNote, Target, Users, Settings, LogOut
+  StickyNote, Target, Users
 } from 'lucide-react'
 
 const navItems = [
@@ -49,21 +49,6 @@ export default function Sidebar() {
           )
         })}
       </nav>
-
-      {/* Bottom */}
-      <div className="px-3 pb-6 space-y-1">
-        <Link
-          href="/settings"
-          className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-slate-300 hover:bg-slate-700 transition-colors"
-        >
-          <Settings size={18} />
-          Settings
-        </Link>
-        <button className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-slate-300 hover:bg-slate-700 transition-colors">
-          <LogOut size={18} />
-          Logout
-        </button>
-      </div>
     </aside>
   )
 }
