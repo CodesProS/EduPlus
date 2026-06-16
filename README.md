@@ -249,17 +249,6 @@ Open [http://localhost:3000](http://localhost:3000) — it redirects to `/dashbo
 
 ---
 
-## Deployment
-
-The app is designed for one-click deployment on **Vercel**:
-
-1. Push the repo to GitHub
-2. Import the project on [vercel.com](https://vercel.com)
-3. Add the three environment variables in Vercel's project settings
-4. Deploy — Vercel auto-detects Next.js and handles everything
-
----
-
 ## Author
 
 Soham Shah — built for the Dynamic Active Software Developer Internship take-home project.
