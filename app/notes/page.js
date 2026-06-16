@@ -65,6 +65,12 @@ export default function NotesPage() {
         </div>
 
         {/* Notes Grid */}
+        {notes.length === 0 && (
+          <div className="bg-white rounded-2xl p-12 shadow-sm flex flex-col items-center justify-center text-center">
+            <p className="text-gray-400 text-sm">No notes yet.</p>
+            <p className="text-gray-300 text-xs mt-1">Click "New Note" to add one.</p>
+          </div>
+        )}
         <div className="grid grid-cols-3 gap-4">
           {notes.map(note => (
             <div key={note.id} className={`${note.color} border rounded-2xl p-5 flex flex-col gap-3`}>
@@ -75,7 +81,7 @@ export default function NotesPage() {
                 </button>
               </div>
               <p className="text-sm text-gray-600 leading-relaxed flex-1">{note.content}</p>
-              <p className="text-xs text-gray-400">{note.date}</p>
+              <p className="text-xs text-gray-400">{new Date(note.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
             </div>
           ))}
         </div>
