@@ -1,50 +1,114 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import Header from '../components/Header'
-import { Users, Eye, ClipboardList, Target } from 'lucide-react'
+import { Users, Eye, ClipboardList, Target, Sparkles } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell
 } from 'recharts'
 
-const stats = [
-  { label: 'Staff Members', value: '124', icon: Users, color: 'bg-blue-100 text-blue-600' },
-  { label: 'Observations', value: '348', icon: Eye, color: 'bg-yellow-100 text-yellow-600' },
-  { label: 'Reviews Done', value: '89', icon: ClipboardList, color: 'bg-green-100 text-green-600' },
-  { label: 'Active Goals', value: '210', icon: Target, color: 'bg-purple-100 text-purple-600' },
-]
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+const COLORS = ['#1e293b', '#f59e0b']
 
-const barData = [
-  { month: 'Jan', observations: 30, reviews: 12 },
-  { month: 'Feb', observations: 45, reviews: 18 },
-  { month: 'Mar', observations: 28, reviews: 10 },
-  { month: 'Apr', observations: 60, reviews: 25 },
-  { month: 'May', observations: 40, reviews: 20 },
-  { month: 'Jun', observations: 75, reviews: 30 },
-  { month: 'Jul', observations: 55, reviews: 22 },
-  { month: 'Aug', observations: 80, reviews: 35 },
-  { month: 'Sep', observations: 65, reviews: 28 },
-  { month: 'Oct', observations: 50, reviews: 20 },
-  { month: 'Nov', observations: 70, reviews: 32 },
-  { month: 'Dec', observations: 90, reviews: 40 },
-]
+function buildBarData(observations, reviews) {
+  const obsCounts = Array(12).fill(0)
+  const revCounts = Array(12).fill(0)
+
+  observations.forEach(o => {
+    const d = new Date(o.date || o.created_at)
+    if (!isNaN(d)) obsCounts[d.getMonth()]++
+  })
+
+  reviews.forEach(r => {
+    const d = new Date(r.created_at)
+    if (!isNaN(d)) revCounts[d.getMonth()]++
+  })
+
+  return MONTHS.map((month, i) => ({
+    month,
+    observations: obsCounts[i],
+    reviews: revCounts[i],
+  }))
+}
 
 const pieData = [
   { name: 'Completed', value: 84 },
   { name: 'Pending', value: 16 },
 ]
 
-const recentReviews = [
-  { name: 'Sarah Johnson', id: 'T-1042', dept: 'Mathematics', score: '94%' },
-  { name: 'Mark Davis', id: 'T-2381', dept: 'Science', score: '88%' },
-  { name: 'Lisa Chen', id: 'T-0957', dept: 'English', score: '91%' },
-  { name: 'James Wilson', id: 'T-3214', dept: 'History', score: '76%' },
-  { name: 'Amy Torres', id: 'T-1876', dept: 'Art', score: '85%' },
-]
-
-const COLORS = ['#1e293b', '#f59e0b']
-
 export default function Dashboard() {
+  const [counts, setCounts] = useState({ staff: 0, observations: 0, reviews: 0, goals: 0 })
+  const [recentReviews, setRecentReviews] = useState([])
+  const [allReviews, setAllReviews] = useState([])
+  const [allGoals, setAllGoals] = useState([])
+  const [barData, setBarData] = useState(MONTHS.map(month => ({ month, observations: 0, reviews: 0 })))
+  const [insights, setInsights] = useState([])
+  const [insightsLoading, setInsightsLoading] = useState(false)
+
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/staff').then(r => r.json()),
+      fetch('/api/observations').then(r => r.json()),
+      fetch('/api/reviews').then(r => r.json()),
+      fetch('/api/goals').then(r => r.json()),
+    ]).then(([staff, observations, reviews, goals]) => {
+      const safeObs = Array.isArray(observations) ? observations : []
+      const safeReviews = Array.isArray(reviews) ? reviews : []
+      const safeGoals = Array.isArray(goals) ? goals : []
+
+      setCounts({
+        staff: Array.isArray(staff) ? staff.length : 0,
+        observations: safeObs.length,
+        reviews: safeReviews.filter(r => r.status === 'Completed').length,
+        goals: safeGoals.filter(g => g.status === 'On Track').length,
+      })
+      setRecentReviews(safeReviews.slice(0, 5))
+      setAllReviews(safeReviews)
+      setAllGoals(safeGoals)
+      setBarData(buildBarData(safeObs, safeReviews))
+    })
+  }, [])
+
+  async function generateInsights() {
+    setInsightsLoading(true)
+    setInsights([])
+    const avgScore = allReviews.length > 0
+      ? Math.round(allReviews.reduce((sum, r) => sum + (r.overall || 0), 0) / allReviews.length)
+      : 0
+    try {
+      const res = await fetch('/api/ai/insights', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          staffCount: counts.staff,
+          observationsCount: counts.observations,
+          reviewsCount: counts.reviews,
+          goalsCount: allGoals.length,
+          onTrack: allGoals.filter(g => g.status === 'On Track').length,
+          atRisk: allGoals.filter(g => g.status === 'At Risk').length,
+          completed: allGoals.filter(g => g.status === 'Completed').length,
+          avgScore,
+          recentReviews,
+        }),
+      })
+      const data = await res.json()
+      setInsights(data.insights || [])
+    } catch {
+      setInsights(['Failed to generate insights. Please check your GROQ_API_KEY.'])
+    }
+    setInsightsLoading(false)
+  }
+
+  const stats = [
+    { label: 'Staff Members', value: counts.staff, icon: Users, color: 'bg-blue-100 text-blue-600' },
+    { label: 'Observations', value: counts.observations, icon: Eye, color: 'bg-yellow-100 text-yellow-600' },
+    { label: 'Reviews Done', value: counts.reviews, icon: ClipboardList, color: 'bg-green-100 text-green-600' },
+    { label: 'Active Goals', value: counts.goals, icon: Target, color: 'bg-purple-100 text-purple-600' },
+  ]
+
+  const hasData = barData.some(d => d.observations > 0 || d.reviews > 0)
+
   return (
     <div className="flex flex-col h-full">
       <Header title="Dashboard" />
@@ -70,22 +134,31 @@ export default function Dashboard() {
           {/* Bar Chart */}
           <div className="col-span-2 bg-white rounded-2xl p-6 shadow-sm">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="font-semibold text-gray-800">Observations & Reviews</h2>
+              <h2 className="font-semibold text-gray-800">
+                Observations & Reviews{' '}
+                <span className="text-xs text-gray-400 font-normal">by month</span>
+              </h2>
               <div className="flex items-center gap-4 text-xs text-gray-500">
                 <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-slate-700 inline-block" /> Observations</span>
                 <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-yellow-400 inline-block" /> Reviews</span>
               </div>
             </div>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={barData} barGap={4}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                <Tooltip />
-                <Bar dataKey="observations" fill="#1e293b" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="reviews" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            {hasData ? (
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={barData} barGap={4}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <Tooltip />
+                  <Bar dataKey="observations" fill="#1e293b" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="reviews" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[220px] flex items-center justify-center text-gray-400 text-sm">
+                No data yet — add observations and reviews to see activity here.
+              </div>
+            )}
           </div>
 
           {/* Pie Chart */}
@@ -111,6 +184,37 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* AI Insights */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Sparkles size={16} className="text-yellow-500" />
+              <h2 className="font-semibold text-gray-800">AI Analytics Insights</h2>
+            </div>
+            <button
+              onClick={generateInsights}
+              disabled={insightsLoading}
+              className="flex items-center gap-2 bg-yellow-400 hover:bg-yellow-300 text-slate-800 px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:opacity-60"
+            >
+              <Sparkles size={13} />
+              {insightsLoading ? 'Analyzing...' : 'Generate Insights'}
+            </button>
+          </div>
+          {insights.length > 0 ? (
+            <div className="space-y-3">
+              {insights.map((insight, i) => (
+                <div key={i} className="flex items-start gap-3 bg-gray-50 rounded-xl px-4 py-3">
+                  <p className="text-sm text-gray-700 leading-relaxed">{insight}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400 italic">
+              Click "Generate Insights" to get AI-powered analytics based on your school's live data.
+            </p>
+          )}
+        </div>
+
         {/* Recent Reviews Table */}
         <div className="bg-white rounded-2xl p-6 shadow-sm">
           <h2 className="font-semibold text-gray-800 mb-4">Recent Performance Reviews</h2>
@@ -118,7 +222,7 @@ export default function Dashboard() {
             <thead>
               <tr className="text-gray-400 border-b border-gray-100">
                 <th className="text-left py-2 font-medium">Name</th>
-                <th className="text-left py-2 font-medium">Staff ID</th>
+                <th className="text-left py-2 font-medium">Status</th>
                 <th className="text-left py-2 font-medium">Department</th>
                 <th className="text-left py-2 font-medium">Score</th>
               </tr>
@@ -128,13 +232,13 @@ export default function Dashboard() {
                 <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
                   <td className="py-3 flex items-center gap-3">
                     <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center text-slate-600 font-semibold text-xs">
-                      {r.name[0]}
+                      {r.teacher[0]}
                     </div>
-                    {r.name}
+                    {r.teacher}
                   </td>
-                  <td className="py-3 text-gray-500">{r.id}</td>
                   <td className="py-3 text-gray-500">{r.dept}</td>
-                  <td className="py-3 font-semibold text-red-500">{r.score}</td>
+                  <td className="py-3 text-gray-500">{r.status}</td>
+                  <td className="py-3 font-semibold text-slate-700">{r.overall}%</td>
                 </tr>
               ))}
             </tbody>
