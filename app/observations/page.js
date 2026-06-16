@@ -1,16 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Header from '../components/Header'
-import { Plus, X, ChevronDown } from 'lucide-react'
-
-const initialObservations = [
-  { id: 1, teacher: 'Sarah Johnson', dept: 'Mathematics', date: '2026-06-10', type: 'Formal', rating: 'Excellent', notes: 'Outstanding lesson structure and student engagement.' },
-  { id: 2, teacher: 'Mark Davis', dept: 'Science', date: '2026-06-08', type: 'Informal', rating: 'Good', notes: 'Good use of lab materials, pacing could improve.' },
-  { id: 3, teacher: 'Lisa Chen', dept: 'English', date: '2026-06-06', type: 'Formal', rating: 'Excellent', notes: 'Creative writing activity was very well executed.' },
-  { id: 4, teacher: 'James Wilson', dept: 'History', date: '2026-06-04', type: 'Walkthrough', rating: 'Needs Improvement', notes: 'Students off task frequently, classroom management needed.' },
-  { id: 5, teacher: 'Amy Torres', dept: 'Art', date: '2026-06-02', type: 'Informal', rating: 'Good', notes: 'Strong project-based learning approach observed.' },
-]
+import { Plus, X } from 'lucide-react'
 
 const ratingColors = {
   'Excellent': 'bg-green-100 text-green-700',
@@ -25,15 +17,36 @@ const typeColors = {
 }
 
 export default function ObservationsPage() {
-  const [observations, setObservations] = useState(initialObservations)
+  const [observations, setObservations] = useState([])
+  const [staff, setStaff] = useState([])
   const [showForm, setShowForm] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [form, setForm] = useState({
     teacher: '', dept: '', date: '', type: 'Formal', rating: 'Good', notes: ''
   })
 
-  function handleSubmit(e) {
+  useEffect(() => {
+    fetch('/api/observations')
+      .then(res => res.json())
+      .then(data => { setObservations(Array.isArray(data) ? data : []); setLoading(false) })
+    fetch('/api/staff')
+      .then(res => res.json())
+      .then(data => setStaff(Array.isArray(data) ? data : []))
+  }, [])
+
+  function handleTeacherChange(e) {
+    const selected = staff.find(s => s.name === e.target.value)
+    setForm({ ...form, teacher: e.target.value, dept: selected ? selected.dept : '' })
+  }
+
+  async function handleSubmit(e) {
     e.preventDefault()
-    const newObs = { ...form, id: observations.length + 1 }
+    const res = await fetch('/api/observations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(form),
+    })
+    const newObs = await res.json()
     setObservations([newObs, ...observations])
     setForm({ teacher: '', dept: '', date: '', type: 'Formal', rating: 'Good', notes: '' })
     setShowForm(false)
@@ -70,23 +83,26 @@ export default function ObservationsPage() {
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-xs text-gray-500 mb-1 block">Teacher Name</label>
-                    <input
+                    <label className="text-xs text-gray-500 mb-1 block">Teacher</label>
+                    <select
                       required
                       value={form.teacher}
-                      onChange={e => setForm({ ...form, teacher: e.target.value })}
-                      placeholder="e.g. Sarah Johnson"
+                      onChange={handleTeacherChange}
                       className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-slate-400"
-                    />
+                    >
+                      <option value="">Select teacher</option>
+                      {staff.map(s => (
+                        <option key={s.id} value={s.name}>{s.name}</option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="text-xs text-gray-500 mb-1 block">Department</label>
                     <input
-                      required
+                      readOnly
                       value={form.dept}
-                      onChange={e => setForm({ ...form, dept: e.target.value })}
-                      placeholder="e.g. Mathematics"
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-slate-400"
+                      placeholder="Auto-filled"
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500"
                     />
                   </div>
                 </div>
@@ -150,6 +166,7 @@ export default function ObservationsPage() {
         )}
 
         {/* Observations List */}
+        {loading && <p className="text-gray-400 text-sm">Loading...</p>}
         <div className="space-y-3">
           {observations.map(obs => (
             <div key={obs.id} className="bg-white rounded-2xl p-5 shadow-sm">

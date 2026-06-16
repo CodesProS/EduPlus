@@ -1,16 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Header from '../components/Header'
-import { Plus, X, ChevronRight } from 'lucide-react'
-
-const initialReviews = [
-  { id: 1, teacher: 'Sarah Johnson', dept: 'Mathematics', period: 'Spring 2026', status: 'Completed', overall: 94, teaching: 96, communication: 92, professionalism: 94, comments: 'Exceptional performance across all areas. A model teacher.' },
-  { id: 2, teacher: 'Mark Davis', dept: 'Science', period: 'Spring 2026', status: 'Completed', overall: 88, teaching: 90, communication: 85, professionalism: 89, comments: 'Strong content knowledge, continues to improve engagement strategies.' },
-  { id: 3, teacher: 'Lisa Chen', dept: 'English', period: 'Spring 2026', status: 'In Progress', overall: 91, teaching: 93, communication: 90, professionalism: 90, comments: 'Review in progress.' },
-  { id: 4, teacher: 'James Wilson', dept: 'History', period: 'Spring 2026', status: 'Pending', overall: 76, teaching: 74, communication: 78, professionalism: 76, comments: 'Needs support with classroom management strategies.' },
-  { id: 5, teacher: 'Amy Torres', dept: 'Art', period: 'Spring 2026', status: 'Completed', overall: 85, teaching: 87, communication: 83, professionalism: 85, comments: 'Creative and passionate educator, great student relationships.' },
-]
+import { Plus, X, ChevronRight, Sparkles } from 'lucide-react'
 
 const statusColors = {
   'Completed': 'bg-green-100 text-green-700',
@@ -33,21 +25,68 @@ function ScoreBar({ label, value }) {
 }
 
 export default function ReviewsPage() {
-  const [reviews, setReviews] = useState(initialReviews)
-  const [selected, setSelected] = useState(reviews[0])
+  const [reviews, setReviews] = useState([])
+  const [staff, setStaff] = useState([])
+  const [selected, setSelected] = useState(null)
   const [showForm, setShowForm] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [aiSummary, setAiSummary] = useState('')
+  const [aiLoading, setAiLoading] = useState(false)
   const [form, setForm] = useState({
     teacher: '', dept: '', period: 'Spring 2026', teaching: '', communication: '', professionalism: '', comments: ''
   })
 
-  function handleSubmit(e) {
+  useEffect(() => {
+    fetch('/api/reviews')
+      .then(res => res.json())
+      .then(data => { setReviews(Array.isArray(data) ? data : []); setSelected(data[0] || null); setLoading(false) })
+    fetch('/api/staff')
+      .then(res => res.json())
+      .then(data => setStaff(Array.isArray(data) ? data : []))
+  }, [])
+
+  function handleSelectReview(r) {
+    setSelected(r)
+    setAiSummary('')
+  }
+
+  function handleTeacherChange(e) {
+    const found = staff.find(s => s.name === e.target.value)
+    setForm({ ...form, teacher: e.target.value, dept: found ? found.dept : '' })
+  }
+
+  async function handleSubmit(e) {
     e.preventDefault()
     const overall = Math.round((+form.teaching + +form.communication + +form.professionalism) / 3)
-    const newReview = { ...form, id: reviews.length + 1, status: 'Completed', overall }
+    const res = await fetch('/api/reviews', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...form, status: 'Completed', overall }),
+    })
+    const newReview = await res.json()
     setReviews([newReview, ...reviews])
     setSelected(newReview)
+    setAiSummary('')
     setShowForm(false)
     setForm({ teacher: '', dept: '', period: 'Spring 2026', teaching: '', communication: '', professionalism: '', comments: '' })
+  }
+
+  async function generateAiSummary() {
+    if (!selected) return
+    setAiLoading(true)
+    setAiSummary('')
+    try {
+      const res = await fetch('/api/ai/summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(selected),
+      })
+      const data = await res.json()
+      setAiSummary(data.summary)
+    } catch {
+      setAiSummary('Failed to generate summary. Please check your GROQ_API_KEY.')
+    }
+    setAiLoading(false)
   }
 
   return (
@@ -71,7 +110,7 @@ export default function ReviewsPage() {
             {reviews.map(r => (
               <div
                 key={r.id}
-                onClick={() => setSelected(r)}
+                onClick={() => handleSelectReview(r)}
                 className={`px-4 py-3 border-b border-gray-50 cursor-pointer transition-colors ${selected?.id === r.id ? 'bg-slate-800' : 'hover:bg-gray-50'}`}
               >
                 <div className="flex items-center justify-between">
@@ -120,6 +159,31 @@ export default function ReviewsPage() {
               <h3 className="font-semibold text-gray-800 mb-2">Comments</h3>
               <p className="text-sm text-gray-500 leading-relaxed">{selected.comments}</p>
             </div>
+
+            {/* AI Coaching Summary */}
+            <div className="bg-white rounded-2xl p-6 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Sparkles size={16} className="text-yellow-500" />
+                  <h3 className="font-semibold text-gray-800">AI Coaching Summary</h3>
+                </div>
+                <button
+                  onClick={generateAiSummary}
+                  disabled={aiLoading}
+                  className="flex items-center gap-2 bg-yellow-400 hover:bg-yellow-300 text-slate-800 px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:opacity-60"
+                >
+                  <Sparkles size={13} />
+                  {aiLoading ? 'Generating...' : 'Generate'}
+                </button>
+              </div>
+              {aiSummary ? (
+                <p className="text-sm text-gray-600 leading-relaxed">{aiSummary}</p>
+              ) : (
+                <p className="text-sm text-gray-400 italic">
+                  Click "Generate" to get an AI-powered coaching summary and recommendations for this teacher.
+                </p>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -136,16 +200,19 @@ export default function ReviewsPage() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs text-gray-500 mb-1 block">Teacher Name</label>
-                  <input required value={form.teacher} onChange={e => setForm({ ...form, teacher: e.target.value })}
-                    placeholder="e.g. Sarah Johnson"
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-slate-400" />
+                  <label className="text-xs text-gray-500 mb-1 block">Teacher</label>
+                  <select required value={form.teacher} onChange={handleTeacherChange}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-slate-400">
+                    <option value="">Select teacher</option>
+                    {staff.map(s => (
+                      <option key={s.id} value={s.name}>{s.name}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="text-xs text-gray-500 mb-1 block">Department</label>
-                  <input required value={form.dept} onChange={e => setForm({ ...form, dept: e.target.value })}
-                    placeholder="e.g. Mathematics"
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-slate-400" />
+                  <input readOnly value={form.dept} placeholder="Auto-filled"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500" />
                 </div>
               </div>
 

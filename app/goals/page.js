@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Header from '../components/Header'
-import { Plus, X, Target } from 'lucide-react'
+import { Plus, X, Target, Sparkles } from 'lucide-react'
 
 const statusColors = {
   'On Track': 'bg-green-100 text-green-700',
@@ -18,14 +18,46 @@ const progressColors = {
 
 export default function GoalsPage() {
   const [goals, setGoals] = useState([])
+  const [staff, setStaff] = useState([])
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ teacher: '', dept: '', goal: '', deadline: '', progress: '', status: 'On Track' })
+  const [goalLoading, setGoalLoading] = useState(false)
 
   useEffect(() => {
     fetch('/api/goals')
       .then(res => res.json())
-      .then(data => setGoals(data))
+      .then(data => setGoals(Array.isArray(data) ? data : []))
+    fetch('/api/staff')
+      .then(res => res.json())
+      .then(data => setStaff(Array.isArray(data) ? data : []))
   }, [])
+
+  function handleTeacherChange(e) {
+    const selected = staff.find(s => s.name === e.target.value)
+    setForm({ ...form, teacher: e.target.value, dept: selected ? selected.dept : '', goal: '' })
+  }
+
+  async function suggestGoal() {
+    if (!form.teacher) return
+    setGoalLoading(true)
+    try {
+      const reviewsRes = await fetch('/api/reviews')
+      const allReviews = await reviewsRes.json()
+      const teacherReviews = Array.isArray(allReviews)
+        ? allReviews.filter(r => r.teacher === form.teacher)
+        : []
+      const res = await fetch('/api/ai/goal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teacher: form.teacher, dept: form.dept, reviews: teacherReviews }),
+      })
+      const data = await res.json()
+      setForm(f => ({ ...f, goal: data.goal }))
+    } catch {
+      setForm(f => ({ ...f, goal: 'Failed to generate suggestion. Check your GROQ_API_KEY.' }))
+    }
+    setGoalLoading(false)
+  }
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -147,24 +179,38 @@ export default function GoalsPage() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs text-gray-500 mb-1 block">Teacher Name</label>
-                  <input required value={form.teacher} onChange={e => setForm({ ...form, teacher: e.target.value })}
-                    placeholder="e.g. Sarah Johnson"
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-slate-400" />
+                  <label className="text-xs text-gray-500 mb-1 block">Teacher</label>
+                  <select required value={form.teacher} onChange={handleTeacherChange}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-slate-400">
+                    <option value="">Select teacher</option>
+                    {staff.map(s => (
+                      <option key={s.id} value={s.name}>{s.name}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="text-xs text-gray-500 mb-1 block">Department</label>
-                  <input required value={form.dept} onChange={e => setForm({ ...form, dept: e.target.value })}
-                    placeholder="e.g. Mathematics"
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-slate-400" />
+                  <input readOnly value={form.dept} placeholder="Auto-filled"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500" />
                 </div>
               </div>
 
               <div>
-                <label className="text-xs text-gray-500 mb-1 block">Goal Description</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs text-gray-500">Goal Description</label>
+                  <button
+                    type="button"
+                    onClick={suggestGoal}
+                    disabled={!form.teacher || goalLoading}
+                    className="flex items-center gap-1 text-xs bg-yellow-400 hover:bg-yellow-300 text-slate-800 px-3 py-1 rounded-lg font-semibold transition-colors disabled:opacity-40"
+                  >
+                    <Sparkles size={11} />
+                    {goalLoading ? 'Suggesting...' : 'AI Suggest'}
+                  </button>
+                </div>
                 <textarea required value={form.goal} onChange={e => setForm({ ...form, goal: e.target.value })}
-                  placeholder="Describe the goal..."
-                  rows={2}
+                  placeholder={form.teacher ? 'Describe the goal or click AI Suggest...' : 'Select a teacher first, then use AI Suggest'}
+                  rows={3}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-slate-400 resize-none" />
               </div>
 
